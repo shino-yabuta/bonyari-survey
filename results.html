@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>調査結果｜「ぼんやり」の感じ方の調査</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<style>
+  :root {
+    --pico-font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    --pico-primary: #1c1b1a; --pico-primary-hover: #3a3936;
+    --pico-background-color: #fafaf9; --pico-color: #1c1b1a;
+  }
+  main { max-width:600px; margin:0 auto; padding:0 0 64px; display:flex; flex-direction:column; gap:56px; }
+  .pad { padding:0 16px; }
+  h1 { margin:32px 0 12px; font-size:1.25rem; }
+  header p { margin:0; font-size:.95rem; line-height:1.75; text-wrap:pretty; }
+  h2 { font-size:1rem; margin:0; }
+  section { display:flex; flex-direction:column; gap:12px; }
+  .frame { width:100%; overflow:hidden; line-height:0; }
+  .frame img { width:100%; height:auto; display:block; }
+  .tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+  .tabs button {
+    margin:0; padding:8px 4px; min-height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    font-size:.85rem; line-height:1.2; background:#fff; color:#1c1b1a;
+    border:1px solid #d6d3d1; border-radius:6px;
+  }
+  .tabs button small { display:none; font-size:.75rem; font-variant-numeric:tabular-nums; }
+  .tabs button[aria-pressed="true"] small { display:block; }
+  .tabs button[aria-pressed="true"] { background:#1c1b1a; color:#fff; border-color:#1c1b1a; }
+  .tabs button[aria-pressed="true"] small { color:#d6d3d1; }
+  .note { font-size:.8rem; color:var(--pico-muted-color); line-height:1.7; margin:0; }
+</style>
+</head>
+<body>
+<main>
+  <header class="pad">
+    <h1>調査結果</h1>
+    <p>それぞれの写真で「ぼんやりしている」と感じ始めた位置の、最低・平均・最高のぼかしを切り替えて見られます。数値はアンケートのスライダーの位置（0〜100%）です。写真はアンケートと同じ大きさで表示しています。</p>
+  </header>
+  <div id="results" style="display:flex;flex-direction:column;gap:56px"></div>
+</main>
+
+<script>
+const BASE_WIDTH = 600;
+// 600px幅基準の blur_base_px
+const RESULTS = [
+  { src: "images/photo1.jpg", avg: 5.02, min: 0.3, max: 19.5 },
+  { src: "images/photo2.jpg", avg: 7.29, min: 0.6, max: 18.0 },
+  { src: "images/photo3.jpg", avg: 7.91, min: 0.6, max: 30.0 },
+];
+const KINDS = [["orig", "元画像"], ["min", "最低"], ["avg", "平均"], ["max", "最高"]];
+const DEFAULT_KIND = "orig";
+const MAX_BLUR = 30; // スライダー100 = 30px（600px幅基準）
+const pct = v => Math.round(v / MAX_BLUR * 100) + "%";
+
+const root = document.getElementById("results");
+const items = RESULTS.map((r, i) => {
+  const sec = document.createElement("section");
+  sec.innerHTML = `
+    <h2 class="pad">写真 ${i + 1}</h2>
+    <div class="frame"><img src="${r.src}" alt="写真${i + 1}"></div>
+    <div class="tabs pad">${KINDS.map(([k, label]) => `
+      <button type="button" data-kind="${k}" aria-pressed="false">${label}${k === "orig" ? "" : `<small>${pct(r[k])}</small>`}</button>`).join("")}
+    </div>`;
+  root.appendChild(sec);
+  const item = { r, img: sec.querySelector("img"), frame: sec.querySelector(".frame"), btns: sec.querySelectorAll("button"), kind: DEFAULT_KIND };
+  item.btns.forEach(b => b.addEventListener("click", () => { item.kind = b.dataset.kind; apply(item); }));
+  return item;
+});
+
+// アンケートと同じく、表示幅に比例させる
+function apply(item) {
+  const base = item.kind === "orig" ? 0 : item.r[item.kind];
+  const w = item.frame.clientWidth || BASE_WIDTH;
+  item.img.style.filter = `blur(${(base * w / BASE_WIDTH).toFixed(2)}px)`;
+  item.btns.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.kind === item.kind)));
+}
+items.forEach(apply);
+window.addEventListener("resize", () => items.forEach(apply));
+</script>
+</body>
+</html>
