@@ -59,7 +59,8 @@
 const BASE_WIDTH = 600;
 const MAX_BLUR = 30; // スライダー100 = 30px（600px幅基準）
 // 回答：[年代, 写真1, 写真2, 写真3]（スライダー値 0〜100）。回答が増えたらここを更新
-const RESPONSES = [
+// 読み込めなかったときの予備データ（通常はスプレッドシートから自動取得）
+let RESPONSES = [
   ["40代", 19, 21, 19],
   ["30代", 9, 5, 8],
   ["40代", 5, 4, 2],
@@ -118,6 +119,7 @@ const KINDS = [["orig", "元画像"], ["min", "最低"], ["avg", "平均"], ["me
 const DEFAULT_KIND = "orig";
 const pct = v => Math.round(v / MAX_BLUR * 100) + "%";
 
+function start() {
 const root = document.getElementById("results");
 const items = RESULTS.map((r, i) => {
   const sec = document.createElement("section");
@@ -191,6 +193,14 @@ const agesEl = document.getElementById("ages");
   agesEl.appendChild(b);
 });
 update();
+}
+
+const DATA_URL = "https://script.google.com/macros/s/AKfycbyg2egtjkwuJB7AaTSB0GUOFJZFAcBGWO3ZidOmpoAbLY-GZiDyYpjM7qhVwYYF5ioo0Q/exec";
+fetch(DATA_URL)
+  .then(r => r.json())
+  .then(d => { if (Array.isArray(d) && d.length) RESPONSES = d; })
+  .catch(() => {})
+  .finally(start);
 </script>
 </body>
 </html>
