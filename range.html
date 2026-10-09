@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ぼんやりと感じる人の割合｜「ぼんやり」の感じ方の調査</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+<style>
+  :root {
+    --pico-font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    --pico-primary: #1c1b1a; --pico-primary-hover: #3a3936;
+    --pico-background-color: #fafaf9; --pico-color: #1c1b1a;
+  }
+  a { color:#1c1b1a; } a:hover { color:#c2410c; }
+  main { max-width:1120px; margin:0 auto; padding:0 16px 64px; display:flex; flex-direction:column; gap:48px; }
+  h1 { margin:32px 0 12px; font-size:1.25rem; }
+  header p { margin:0; font-size:.95rem; line-height:1.75; text-wrap:pretty; max-width:640px; }
+  h2 { font-size:1rem; margin:0; }
+  section { display:flex; flex-direction:column; gap:10px; }
+  .scroll { overflow-x:auto; }
+  .grid { min-width:760px; display:grid; grid-template-columns:repeat(11,minmax(0,1fr)); column-gap:6px; row-gap:0; }
+  .heat { height:40px; display:flex; align-items:center; justify-content:center; font-size:.8rem; font-variant-numeric:tabular-nums; margin-right:-6px; }
+  .heat:last-of-type { margin-right:0; }
+  .thumb { margin:6px 0 0; padding:0; border:2px solid transparent; background:none; border-radius:0; overflow:hidden; line-height:0; cursor:pointer; }
+  .scroll { padding-bottom:12px; }
+  .thumb[aria-pressed="true"] { border-color:#1c1b1a; }
+  .thumb img { width:100%; aspect-ratio:3/2; object-fit:cover; display:block; }
+  .lbl { text-align:center; font-size:.8rem; color:#78716c; padding-top:4px; font-variant-numeric:tabular-nums; }
+  .preview { max-width:600px; display:flex; flex-direction:column; gap:6px; }
+  .preview .frame { width:100%; overflow:hidden; line-height:0; }
+  .preview img { width:100%; height:auto; display:block; }
+  .mark { grid-column:auto / span 1; white-space:nowrap; font-size:.8rem; font-weight:600; padding:0 0 4px 3px; border-left:3px solid #1c1b1a; }
+  .note { font-size:.8rem; color:#78716c; line-height:1.7; margin:0; }
+  .legend { display:flex; align-items:center; gap:8px; font-size:.8rem; color:#57534e; }
+  .legend i { width:160px; height:10px; display:block; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ぼんやりと感じる人の割合</h1>
+    <p>ぼかしを0から100まで10刻みでかけた写真です。上の帯は、そのぼかしで「ぼんやりしている」と感じる人の割合を表しています。感じる人が80%を超えたところからを「ぼんやり」としています。</p>
+  </header>
+  <div class="legend"><span>0%</span><i id="legendBar"></i><span>100%</span></div>
+  <div id="rows" style="display:flex;flex-direction:column;gap:48px"></div>
+  <p class="note">小さい写真は縮小しているため、実際より鮮明に見えます。写真を押すと、アンケートと同じ大きさで表示します。</p>
+</main>
+
+<script>
+const BASE_WIDTH = 600;
+const MAX_BLUR = 30;
+const SRCS = ["images/photo1.jpg", "images/photo2.jpg", "images/photo3.jpg"];
+const STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+const AGREE = 0.8; // この割合以上を「ぼんやり」とする合意の基準
+let RESPONSES = [
+  ["40代", 19, 21, 19],
+  ["30代", 9, 5, 8],
+  ["40代", 5, 4, 2],
+  ["30代", 7, 14, 15],
+  ["70代以上", 9, 18, 14],
+  ["40代", 12, 14, 13],
+  ["10代", 31, 50, 38],
+  ["40代", 10, 11, 10],
+  ["40代", 19, 41, 23],
+  ["40代", 36, 48, 46],
+  ["50代", 14, 35, 46],
+  ["40代", 18, 42, 58],
+  ["40代", 22, 41, 100],
+  ["30代", 31, 40, 37],
+  ["30代", 12, 26, 23],
+  ["40代", 2, 2, 4],
+  ["50代", 29, 36, 42],
+  ["70代以上", 25, 25, 19],
+  ["40代", 7, 6, 10],
+  ["70代以上", 65, 60, 63],
+  ["40代", 4, 7, 6],
+  ["70代以上", 7, 59, 61],
+  ["10代", 33, 39, 37],
+  ["40代", 16, 8, 43],
+  ["30代", 1, 16, 15],
+  ["40代", 14, 23, 21],
+  ["40代", 14, 18, 12],
+  ["40代", 7, 10, 9],
+  ["40代", 20, 34, 30],
+  ["20代", 23, 23, 20],
+  ["40代", 9, 13, 12],
+  ["50代", 18, 18, 16],
+  ["30代", 9, 13, 8],
+  ["30代", 17, 17, 25],
+  ["70代以上", 12, 13, 18],
+];
+
+const color = p => `oklch(${(0.97 - 0.4 * p).toFixed(3)} ${(0.01 + 0.22 * p).toFixed(3)} 27)`;
+document.getElementById("legendBar").style.background = `linear-gradient(to right, ${[0, .25, .5, .75, 1].map(color).join(",")})`;
+
+function start() {
+  const root = document.getElementById("rows");
+  SRCS.forEach((src, i) => {
+    const vals = RESPONSES.map(r => r[i + 1]);
+    const share = s => vals.filter(v => v <= s).length / vals.length;
+    const agreeStep = STEPS.find(s => share(s) >= AGREE);
+    const sec = document.createElement("section");
+    sec.innerHTML = `
+      <h2>写真 ${i + 1}</h2>
+      <div class="scroll"><div class="grid">
+        ${STEPS.map(s => s === agreeStep ? `<div class="mark">ここからぼんやり →</div>` : `<div></div>`).join("")}
+        ${STEPS.map(s => { const p = share(s); return `<div class="heat" style="background:${color(p)};color:${p > 0.65 ? "#fff" : "#1c1b1a"};${s === agreeStep ? "box-shadow:inset 3px 0 0 #1c1b1a;" : ""}">${Math.round(p * 100)}%</div>`; }).join("")}
+        ${STEPS.map(s => `<button type="button" class="thumb" data-step="${s}" aria-pressed="false"><img src="${src}" alt="写真${i + 1} ぼかし${s}"></button>`).join("")}
+        ${STEPS.map(s => `<div class="lbl">${s}</div>`).join("")}
+      </div></div>
+      <div class="preview" hidden>
+        <div class="frame"><img src="${src}" alt="写真${i + 1}"></div>
+        <p class="note"></p>
+      </div>`;
+    root.appendChild(sec);
+    const thumbs = sec.querySelectorAll(".thumb");
+    const prev = sec.querySelector(".preview"), pimg = prev.querySelector("img"), pnote = prev.querySelector(".note");
+    let current = null;
+    const blurThumbs = () => thumbs.forEach(t => {
+      const w = t.clientWidth || 80;
+      t.querySelector("img").style.filter = `blur(${(t.dataset.step / 100 * MAX_BLUR * w / BASE_WIDTH).toFixed(2)}px)`;
+    });
+    const showPrev = () => {
+      if (current === null) return;
+      const w = prev.querySelector(".frame").clientWidth || BASE_WIDTH;
+      pimg.style.filter = `blur(${(current / 100 * MAX_BLUR * w / BASE_WIDTH).toFixed(2)}px)`;
+      pnote.textContent = `ぼかし ${current}　ぼんやりと感じる人 ${Math.round(share(current) * 100)}%`;
+    };
+    thumbs.forEach(t => t.addEventListener("click", () => {
+      const s = +t.dataset.step;
+      current = current === s ? null : s;
+      prev.hidden = current === null;
+      thumbs.forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.step === current)));
+      showPrev();
+    }));
+    blurThumbs();
+    window.addEventListener("resize", () => { blurThumbs(); showPrev(); });
+  });
+}
+
+const DATA_URL = "https://script.google.com/macros/s/AKfycbyg2egtjkwuJB7AaTSB0GUOFJZFAcBGWO3ZidOmpoAbLY-GZiDyYpjM7qhVwYYF5ioo0Q/exec";
+// 6秒で応答がなければ予備データで表示
+const ctrl = new AbortController();
+setTimeout(() => ctrl.abort(), 6000);
+fetch(DATA_URL, { signal: ctrl.signal })
+  .then(r => r.json())
+  .then(d => { if (Array.isArray(d) && d.length) RESPONSES = d; })
+  .catch(() => {})
+  .finally(start);
+</script>
+</body>
+</html>
