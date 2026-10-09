@@ -11,7 +11,7 @@
     --pico-primary: #1c1b1a; --pico-primary-hover: #3a3936;
     --pico-background-color: #fafaf9; --pico-color: #1c1b1a;
   }
-  main { max-width:600px; margin:0 auto; padding:0 0 64px; display:flex; flex-direction:column; gap:56px; }
+  main { max-width:600px; margin:0 auto; padding:0 0 64px; display:flex; flex-direction:column; gap:40px; }
   .pad { padding:0 16px; }
   h1 { margin:32px 0 12px; font-size:1.25rem; }
   header p { margin:0; font-size:.95rem; line-height:1.75; text-wrap:pretty; }
@@ -29,15 +29,24 @@
   .tabs button[aria-pressed="true"] small { display:block; }
   .tabs button[aria-pressed="true"] { background:#1c1b1a; color:#fff; border-color:#1c1b1a; }
   .tabs button[aria-pressed="true"] small { color:#d6d3d1; }
+  .ages { padding:0 16px; display:flex; flex-wrap:wrap; gap:6px; }
+  .ages button { margin:0; padding:6px 12px; font-size:.85rem; background:#fff; color:#1c1b1a; border:1px solid #d6d3d1; border-radius:999px; display:flex; gap:6px; align-items:baseline; }
+  .ages button small { font-size:.75rem; color:#78716c; font-variant-numeric:tabular-nums; }
+  .ages button[aria-pressed="true"] { background:#1c1b1a; color:#fff; border-color:#1c1b1a; }
+  .ages button[aria-pressed="true"] small { color:#d6d3d1; }
+  .ages button:disabled { opacity:.4; }
   .note { font-size:.8rem; color:var(--pico-muted-color); line-height:1.7; margin:0; }
 </style>
 </head>
 <body>
 <main>
-  <header class="pad">
-    <h1>調査結果</h1>
-    <p>それぞれの写真で「ぼんやりしている」と感じ始めた位置の、最低・平均・中央値・最高のぼかしを切り替えて見られます。数値はアンケートのスライダーの位置（0〜100%）です。写真はアンケートと同じ大きさで表示しています。</p>
-  </header>
+  <div style="display:flex;flex-direction:column;gap:0">
+    <header class="pad" style="padding-bottom:16px">
+      <h1>調査結果</h1>
+      <p>それぞれの写真で「ぼんやりしている」と感じ始めた位置の、最低・平均・中央値・最高のぼかしを切り替えて見られます。数値はアンケートのスライダーの位置（0〜100%）です。写真はアンケートと同じ大きさで表示しています。</p>
+    </header>
+    <div class="ages" id="ages"></div>
+  </div>
   <div id="results" style="display:flex;flex-direction:column;gap:56px"></div>
   <section class="pad">
     <h2>回答の分布</h2>
@@ -95,13 +104,16 @@ function median(vals) {
   const v = [...vals].sort((a, b) => a - b), n = v.length;
   return n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
 }
-const RESULTS = SLIDER.map((vals, i) => ({
+let age = "all";
+const filtered = () => RESPONSES.filter(r => age === "all" || r[0] === age);
+const stats = (vals, i) => ({
   src: SRCS[i],
   min: toPx(Math.min(...vals)),
   avg: toPx(vals.reduce((a, b) => a + b, 0) / vals.length),
   med: toPx(median(vals)),
   max: toPx(Math.max(...vals)),
-}));
+});
+const RESULTS = SLIDER.map(stats);
 const KINDS = [["orig", "元画像"], ["min", "最低"], ["avg", "平均"], ["med", "中央値"], ["max", "最高"]];
 const DEFAULT_KIND = "orig";
 const pct = v => Math.round(v / MAX_BLUR * 100) + "%";
@@ -113,7 +125,7 @@ const items = RESULTS.map((r, i) => {
     <h2 class="pad">写真 ${i + 1}</h2>
     <div class="frame"><img src="${r.src}" alt="写真${i + 1}"></div>
     <div class="tabs pad">${KINDS.map(([k, label]) => `
-      <button type="button" data-kind="${k}" aria-pressed="false">${label}${k === "orig" ? "" : `<small>${pct(r[k])}</small>`}</button>`).join("")}
+      <button type="button" data-kind="${k}" aria-pressed="false">${label}${k === "orig" ? "" : `<small data-v="${k}">${pct(r[k])}</small>`}</button>`).join("")}
     </div>`;
   root.appendChild(sec);
   const item = { r, img: sec.querySelector("img"), frame: sec.querySelector(".frame"), btns: sec.querySelectorAll("button"), kind: DEFAULT_KIND };
@@ -131,7 +143,7 @@ function apply(item) {
 items.forEach(apply);
 window.addEventListener("resize", () => items.forEach(apply));
 
-(function drawScatter() {
+function drawScatter() {
   const svg = document.getElementById("scatter");
   const W = 560, H = 360, L = 44, R = 12, T = 12, B = 36;
   const pw = W - L - R, ph = H - T - B, colW = pw / 3;
@@ -143,7 +155,8 @@ window.addEventListener("resize", () => items.forEach(apply));
   });
   let seed = 7;
   const rand = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
-  SLIDER.forEach((vals, i) => {
+  const rows = filtered();
+  [1, 2, 3].map(i => rows.map(r => r[i])).forEach((vals, i) => {
     const cx = L + colW * i + colW / 2;
     vals.forEach(v => {
       const x = cx + (rand() - 0.5) * colW * 0.5;
@@ -156,7 +169,28 @@ window.addEventListener("resize", () => items.forEach(apply));
     s += `<text x="${cx}" y="${H - 12}" text-anchor="middle" font-size="13" fill="#1c1b1a">写真 ${i + 1}</text>`;
   });
   svg.innerHTML = s;
-})();
+}
+
+function update() {
+  const rows = filtered();
+  items.forEach((item, i) => {
+    item.r = stats(rows.map(r => r[i + 1]), i);
+    item.btns.forEach(b => { const sm = b.querySelector("small"); if (sm) sm.textContent = pct(item.r[sm.dataset.v]); });
+    apply(item);
+  });
+  document.querySelectorAll("#ages button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.age === age)));
+  drawScatter();
+}
+const agesEl = document.getElementById("ages");
+[["all", "全員"], ...AGES.map(a => [a, a])].forEach(([key, label]) => {
+  const n = key === "all" ? RESPONSES.length : RESPONSES.filter(r => r[0] === key).length;
+  const b = document.createElement("button");
+  b.type = "button"; b.dataset.age = key; b.disabled = n === 0;
+  b.textContent = label;
+  b.addEventListener("click", () => { age = key; update(); });
+  agesEl.appendChild(b);
+});
+update();
 </script>
 </body>
 </html>
