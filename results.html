@@ -19,7 +19,7 @@
   section { display:flex; flex-direction:column; gap:12px; }
   .frame { width:100%; overflow:hidden; line-height:0; }
   .frame img { width:100%; height:auto; display:block; }
-  .tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+  .tabs { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; }
   .tabs button {
     margin:0; padding:8px 4px; min-height:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
     font-size:.85rem; line-height:1.2; background:#fff; color:#1c1b1a;
@@ -36,22 +36,74 @@
 <main>
   <header class="pad">
     <h1>調査結果</h1>
-    <p>それぞれの写真で「ぼんやりしている」と感じ始めた位置の、最低・平均・最高のぼかしを切り替えて見られます。数値はアンケートのスライダーの位置（0〜100%）です。写真はアンケートと同じ大きさで表示しています。</p>
+    <p>それぞれの写真で「ぼんやりしている」と感じ始めた位置の、最低・平均・中央値・最高のぼかしを切り替えて見られます。数値はアンケートのスライダーの位置（0〜100%）です。写真はアンケートと同じ大きさで表示しています。</p>
   </header>
   <div id="results" style="display:flex;flex-direction:column;gap:56px"></div>
+  <section class="pad">
+    <h2>回答の分布</h2>
+    <p class="note">1つの点が1人の回答です。黒い線は平均、オレンジの点線は中央値です。</p>
+    <svg id="scatter" viewBox="0 0 560 360" style="width:100%;height:auto;display:block" role="img" aria-label="写真ごとの回答の散布図"></svg>
+  </section>
 </main>
 
 <script>
 const BASE_WIDTH = 600;
-// 600px幅基準の blur_base_px
-const RESULTS = [
-  { src: "images/photo1.jpg", avg: 5.02, min: 0.3, max: 19.5 },
-  { src: "images/photo2.jpg", avg: 7.29, min: 0.6, max: 18.0 },
-  { src: "images/photo3.jpg", avg: 7.91, min: 0.6, max: 30.0 },
-];
-const KINDS = [["orig", "元画像"], ["min", "最低"], ["avg", "平均"], ["max", "最高"]];
-const DEFAULT_KIND = "orig";
 const MAX_BLUR = 30; // スライダー100 = 30px（600px幅基準）
+// 回答：[年代, 写真1, 写真2, 写真3]（スライダー値 0〜100）。回答が増えたらここを更新
+const RESPONSES = [
+  ["40代", 19, 21, 19],
+  ["30代", 9, 5, 8],
+  ["40代", 5, 4, 2],
+  ["30代", 7, 14, 15],
+  ["70代以上", 9, 18, 14],
+  ["40代", 12, 14, 13],
+  ["10代", 31, 50, 38],
+  ["40代", 10, 11, 10],
+  ["40代", 19, 41, 23],
+  ["40代", 36, 48, 46],
+  ["50代", 14, 35, 46],
+  ["40代", 18, 42, 58],
+  ["40代", 22, 41, 100],
+  ["30代", 31, 40, 37],
+  ["30代", 12, 26, 23],
+  ["40代", 2, 2, 4],
+  ["50代", 29, 36, 42],
+  ["70代以上", 25, 25, 19],
+  ["40代", 7, 6, 10],
+  ["70代以上", 65, 60, 63],
+  ["40代", 4, 7, 6],
+  ["70代以上", 7, 59, 61],
+  ["10代", 33, 39, 37],
+  ["40代", 16, 8, 43],
+  ["30代", 1, 16, 15],
+  ["40代", 14, 23, 21],
+  ["40代", 14, 18, 12],
+  ["40代", 7, 10, 9],
+  ["40代", 20, 34, 30],
+  ["20代", 23, 23, 20],
+  ["40代", 9, 13, 12],
+  ["50代", 18, 18, 16],
+  ["30代", 9, 13, 8],
+  ["30代", 17, 17, 25],
+  ["70代以上", 12, 13, 18],
+];
+const AGES = ["10代", "20代", "30代", "40代", "50代", "60代", "70代以上"];
+const SLIDER = [1, 2, 3].map(i => RESPONSES.map(r => r[i]));
+const SRCS = ["images/photo1.jpg", "images/photo2.jpg", "images/photo3.jpg"];
+const toPx = v => v / 100 * MAX_BLUR;
+function median(vals) {
+  const v = [...vals].sort((a, b) => a - b), n = v.length;
+  return n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+}
+const RESULTS = SLIDER.map((vals, i) => ({
+  src: SRCS[i],
+  min: toPx(Math.min(...vals)),
+  avg: toPx(vals.reduce((a, b) => a + b, 0) / vals.length),
+  med: toPx(median(vals)),
+  max: toPx(Math.max(...vals)),
+}));
+const KINDS = [["orig", "元画像"], ["min", "最低"], ["avg", "平均"], ["med", "中央値"], ["max", "最高"]];
+const DEFAULT_KIND = "orig";
 const pct = v => Math.round(v / MAX_BLUR * 100) + "%";
 
 const root = document.getElementById("results");
@@ -78,6 +130,33 @@ function apply(item) {
 }
 items.forEach(apply);
 window.addEventListener("resize", () => items.forEach(apply));
+
+(function drawScatter() {
+  const svg = document.getElementById("scatter");
+  const W = 560, H = 360, L = 44, R = 12, T = 12, B = 36;
+  const pw = W - L - R, ph = H - T - B, colW = pw / 3;
+  const y = v => T + ph - v / 100 * ph;
+  let s = "";
+  [0, 25, 50, 75, 100].forEach(v => {
+    s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#e7e5e4"/>`;
+    s += `<text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="12" fill="#78716c">${v}%</text>`;
+  });
+  let seed = 7;
+  const rand = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  SLIDER.forEach((vals, i) => {
+    const cx = L + colW * i + colW / 2;
+    vals.forEach(v => {
+      const x = cx + (rand() - 0.5) * colW * 0.5;
+      s += `<circle cx="${x.toFixed(1)}" cy="${y(v).toFixed(1)}" r="5" fill="#1c1b1a" fill-opacity="0.35"/>`;
+    });
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    s += `<line x1="${cx - colW * 0.32}" x2="${cx + colW * 0.32}" y1="${y(avg)}" y2="${y(avg)}" stroke="#1c1b1a" stroke-width="2.5"/>`;
+    const med = median(vals);
+    s += `<line x1="${cx - colW * 0.32}" x2="${cx + colW * 0.32}" y1="${y(med)}" y2="${y(med)}" stroke="#c2410c" stroke-width="2.5" stroke-dasharray="6 4"/>`;
+    s += `<text x="${cx}" y="${H - 12}" text-anchor="middle" font-size="13" fill="#1c1b1a">写真 ${i + 1}</text>`;
+  });
+  svg.innerHTML = s;
+})();
 </script>
 </body>
 </html>

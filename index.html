@@ -89,6 +89,11 @@ const CONFIG = {
 /* ===== 写真とスライダー ===== */
 const items = document.getElementById("items");
 const state = CONFIG.IMAGES.map((src, i) => ({ id: "photo" + (i + 1), src, value: 0, touched: false }));
+// 表示順をランダムに（idは写真に紐づいたまま）
+for (let i = state.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [state[i], state[j]] = [state[j], state[i]];
+}
 
 state.forEach((s, i) => {
   const el = document.createElement("section");
@@ -152,6 +157,7 @@ btn.addEventListener("click", async () => {
     age: ageEl.value,
     gender: gender(),
   };
+  data.order = state.map(s => s.id.replace("photo", "")).join("-");
   const w = state[0].frame.clientWidth;
   state.forEach(s => {
     data[s.id] = s.value;
